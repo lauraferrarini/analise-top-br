@@ -1,0 +1,35 @@
+name: Analisador Diário de Músicas
+
+on:
+  schedule:
+    # Roda todos os dias às 09:00 UTC (06:00 no Horário de Brasília)
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Permite rodar manualmente no GitHub se você quiser testar
+
+jobs:
+  analisar_dados:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # Permissão necessária para o bot salvar os arquivos
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v3
+
+      - name: Configurar o Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Instalar dependências
+        run: pip install requests beautifulsoup4
+
+      - name: Rodar script de análise
+        run: python analisador.py
+
+      - name: Commit e Push das alterações
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "📊 Relatório diário gerado automaticamente"
+          file_pattern: "dados_anteriores.json relatorio_diario.md"
