@@ -17,7 +17,7 @@ jobs:
       - name: Checkout do repositório
         uses: actions/checkout@v4
         with:
-          ref: main # Garante que vai pegar a ponta da branch principal
+          fetch-depth: 0 # Baixa o histórico completo para evitar problemas de sincronização
 
       - name: Configurar o Python
         uses: actions/setup-python@v5
@@ -30,15 +30,19 @@ jobs:
       - name: Rodar script de análise
         run: python analisador.py
 
-      - name: Sincronizar repositório (Evitar conflitos)
+      - name: Salvar alterações no GitHub (Git Nativo)
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Adiciona os arquivos modificados/criados
+          git add dados_anteriores.json relatorio_diario.md
+          
+          # Só faz o commit se houver alguma mudança real (evita erro se a lista estiver igual)
+          git diff --staged --quiet || git commit -m "📊 Relatório diário gerado automaticamente"
+          
+          # Faz um pull forçando o rebase para engolir qualquer divergência do servidor
           git pull origin main --rebase
-
-      - name: Commit e Push das alterações
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "📊 Relatório diário gerado automaticamente"
-          file_pattern: "dados_anteriores.json relatorio_diario.md"
-          branch: main
+          
+          # Envia as alterações em definitivo
+          git push origin main
