@@ -1,4 +1,4 @@
-# 📊 Relatório Letras.mus.br - 10/06/2026
+# 📊 Relatório Letras.mus.br - 11/06/2026
 
 ## 🚀 Novas Entradas no Top
 - Nenhuma nova entrada expressiva hoje.
