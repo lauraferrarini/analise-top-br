@@ -4,21 +4,23 @@ on:
   schedule:
     # Roda todos os dias às 09:00 UTC (06:00 no Horário de Brasília)
     - cron: '0 9 * * *'
-  workflow_dispatch: # Permite rodar manualmente no GitHub se você quiser testar
+  workflow_dispatch: # Permite rodar manualmente
 
 jobs:
   analisar_dados:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write # Permissão necessária para o bot salvar os arquivos
+      contents: write
 
     steps:
       - name: Checkout do repositório
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          ref: main # Garante que vai pegar a ponta da branch principal
 
       - name: Configurar o Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
@@ -28,8 +30,15 @@ jobs:
       - name: Rodar script de análise
         run: python analisador.py
 
+      - name: Sincronizar repositório (Evitar conflitos)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull origin main --rebase
+
       - name: Commit e Push das alterações
-        uses: stefanzweifel/git-auto-commit-action@v4
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "📊 Relatório diário gerado automaticamente"
           file_pattern: "dados_anteriores.json relatorio_diario.md"
+          branch: main
