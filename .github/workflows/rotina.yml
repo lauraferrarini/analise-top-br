@@ -35,11 +35,11 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # Adiciona os arquivos modificados/criados
-          git add dados_anteriores.json relatorio_diario.md
+          # MAPEAMENTO ATUALIZADO: Salva as duas novas pastas e o relatório da raiz
+          git add historico_dados/ historico_relatorios/ relatorio_diario.md || true
           
-          # Só faz o commit se houver alguma mudança real
-          git diff --staged --quiet || git commit -m "📊 Relatório diário gerado automaticamente"
+          # Só faz o commit se houver alguma mudança real nos relatórios ou dados
+          git diff --staged --quiet || git commit -m "📊 Histórico e relatório diário atualizados"
           
           # Faz um pull forçando o rebase para engolir qualquer divergência do servidor
           git pull origin main --rebase
