@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 import json
 import os
 from datetime import datetime
+import traceback
+import sys
 
 URL = "https://www.letras.mus.br/mais-acessadas/"
 PASTA_DADOS = "historico_dados"
@@ -10,33 +12,36 @@ PASTA_RELATORIOS = "historico_relatorios"
 RELATORIO_RAIZ = "relatorio_diario.md"
 MARGEM_OSCILACAO = 2 
 
-# Garante que as pastas de histórico existam
 os.makedirs(PASTA_DADOS, exist_ok=True)
 os.makedirs(PASTA_RELATORIOS, exist_ok=True)
 
 def extrair_musicas():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-    response = requests.get(URL, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
+    response = requests.get(URL, headers=headers, timeout=15)
+    response.raise_for_status() # Força erro se o site bloquear o robô (ex: erro 403 ou 503)
     
+    soup = BeautifulSoup(response.text, 'html.parser')
     musicas_atuais = {}
     lista_top = soup.find('ol', class_='top-list_mus')
     
-    if lista_top:
-        itens = lista_top.find_all('li')
-        for rank, item in enumerate(itens, start=1):
-            tag_nome = item.find('b')
-            tag_artista = item.find('span')
-            
-            nome = tag_nome.text.strip() if tag_nome else "Desconhecido"
-            artista = tag_artista.text.strip() if tag_artista else "Desconhecido"
-            
-            chave = f"{nome} - {artista}"
-            musicas_atuais[chave] = {
-                "posicao": rank,
-                "nome": nome,
-                "artista": artista
-            }
+    if not lista_top:
+        print("⚠️ Alerta: A estrutura HTML do Letras mudou ou fomos bloqueados por um captcha.")
+        return musicas_atuais
+        
+    itens = lista_top.find_all('li')
+    for rank, item in enumerate(itens, start=1):
+        tag_nome = item.find('b')
+        tag_artista = item.find('span')
+        
+        nome = tag_nome.text.strip() if tag_nome else "Desconhecido"
+        artista = tag_artista.text.strip() if tag_artista else "Desconhecido"
+        
+        chave = f"{nome} - {artista}"
+        musicas_atuais[chave] = {
+            "posicao": rank,
+            "nome": nome,
+            "artista": artista
+        }
             
     return musicas_atuais
 
@@ -44,7 +49,6 @@ def buscar_dados_anteriores():
     data_hoje_iso = datetime.now().strftime("%Y-%m-%d")
     
     if os.path.exists(PASTA_DADOS):
-        # Lista os arquivos mas IGNORA o arquivo gerado hoje (permite testes múltiplos no mesmo dia)
         arquivos = sorted([
             f for f in os.listdir(PASTA_DADOS) 
             if f.endswith('.json') and f != f"dados_{data_hoje_iso}.json"
@@ -54,7 +58,6 @@ def buscar_dados_anteriores():
             with open(ultimo_arquivo, 'r', encoding='utf-8') as f:
                 return json.load(f)
             
-    # Fallback: Se não achar na pasta nova, tenta ver se sobrou o arquivo antigo na raiz
     if os.path.exists("dados_anteriores.json"):
         with open("dados_anteriores.json", 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -63,6 +66,11 @@ def buscar_dados_anteriores():
 
 def gerar_relatorio():
     atuais = extrair_musicas()
+    
+    if not atuais:
+        print("❌ Erro: Nenhuma música pôde ser extraída do site. Abortando.")
+        sys.exit(1)
+        
     anteriores = buscar_dados_anteriores()
     
     data_hoje_iso = datetime.now().strftime("%Y-%m-%d")
@@ -74,17 +82,14 @@ def gerar_relatorio():
     subidas_moderadas = []  
     pequenas_subidas = []   
 
-    # Cenário A: Se for a primeiríssima execução e não houver histórico nenhum salvo
     if not anteriores:
         conteudo_md = f"# 📊 Relatório Letras.mus.br - {data_hoje_br}\n\n"
         conteudo_md += "ℹ️ **Primeira execução detectada com sucesso!**\n"
-        conteudo_md += "O sistema estruturou a base de dados inicial hoje. A partir de amanhã, todas as movimentações, novas entradas e subidas significativas aparecerão organizadas aqui automaticamente.\n\n"
+        conteudo_md += "O sistema estruturou a base de dados inicial hoje. A partir de amanhã, todas as movimentações aparecerão aqui automaticamente.\n\n"
         conteudo_md += "### 📋 Prévia do Top 10 Atual:\n"
         for i, (chave, m) in enumerate(atuais.items(), start=1):
             if i > 10: break
             conteudo_md += f"{i}º. **{m['nome']}** — *{m['artista']}*\n"
-    
-    # Cenário B: Se existir histórico, faz a análise visual detalhada
     else:
         for chave, dados_atuais in atuais.items():
             pos_atual = dados_atuais['posicao']
@@ -111,7 +116,6 @@ def gerar_relatorio():
                 elif diferenca > MARGEM_OSCILACAO:
                     pequenas_subidas.append(dados_item)
 
-        # Ordenações
         subidas_absurdas.sort(key=lambda x: x['posicoes_ganhas'], reverse=True)
         grandes_saltos.sort(key=lambda x: x['posicoes_ganhas'], reverse=True)
         subidas_moderadas.sort(key=lambda x: x['posicoes_ganhas'], reverse=True)
@@ -154,7 +158,6 @@ def gerar_relatorio():
         else:
             conteudo_md += "- Nenhuma música inédita detectada hoje.\n"
 
-    # Salva os arquivos físicos no repositório
     caminho_relatorio_historico = os.path.join(PASTA_RELATORIOS, f"relatorio_{data_hoje_iso}.md")
     with open(caminho_relatorio_historico, 'w', encoding='utf-8') as f:
         f.write(conteudo_md)
@@ -167,5 +170,10 @@ def gerar_relatorio():
         json.dump(atuais, f, ensure_ascii=False, indent=4)
 
 if __name__ == "__main__":
-    gerar_relatorio()
-    print("Análise inteligente concluída com histórico protegido!")
+    try:
+        gerar_relatorio()
+        print("Análise inteligente concluída com sucesso!")
+    except Exception as e:
+        print("\n💥 --- ERRO CRÍTICO DETECTADO NO SCRIPT --- 💥")
+        traceback.print_exc() # Imprime o erro detalhado no log do GitHub
+        sys.exit(1)
